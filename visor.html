@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AXON-6 | Tactical Visor</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background-color: #0b0c10; color: #66fcf1; font-family: 'Courier New', Courier, monospace; margin: 0; padding: 20px; }
+        .dashboard { max-width: 1200px; margin: auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1f2833; padding-bottom: 10px; margin-bottom: 20px; }
+        .stats { display: flex; gap: 15px; }
+        .stat-box { background: #1f2833; padding: 10px 15px; border-radius: 5px; text-align: center; min-width: 100px; font-size: 14px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);}
+        .stat-value { font-size: 20px; font-weight: bold; color: #fff; margin-top: 5px; text-shadow: 0 0 5px rgba(255,255,255,0.3); }
+        .critical { color: #ff003c !important; text-shadow: 0 0 10px rgba(255,0,60,0.5) !important; }
+        .canvas-container { background: #1a1a24; padding: 20px; border-radius: 8px; height: 500px; box-shadow: inset 0 0 20px rgba(0,0,0,0.5); border: 1px solid #1f2833; }
+        #system-log { margin-top: 20px; color: #c5c6c7; font-size: 14px; font-weight: bold; letter-spacing: 1px;}
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="header">
+            <h2>🛡️ AXON-6 VISOR</h2>
+            <div class="stats">
+                <div class="stat-box">HEALTH<div id="health" class="stat-value">100%</div></div>
+                <div class="stat-box">SHIELDS<div id="shields" class="stat-value">1 PARITY</div></div>
+                <div class="stat-box">CUR LAT<div id="latency" class="stat-value">0.0 ms</div></div>
+                <div class="stat-box">MIN LAT<div id="min-latency" class="stat-value">0.0 ms</div></div>
+                <div class="stat-box">MAX LAT<div id="max-latency" class="stat-value">0.0 ms</div></div>
+                <div class="stat-box">AVG LAT<div id="avg-latency" class="stat-value">0.0 ms</div></div>
+            </div>
+        </div>
+
+        <div class="canvas-container">
+            <canvas id="brainwaveChart"></canvas>
+        </div>
+        <div id="system-log">System Standing By... waiting for UDP stream.</div>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('brainwaveChart').getContext('2d');
+        const maxDataPoints = 150; // Widened the view for better presentation
+        
+        let originalData = Array(maxDataPoints).fill(0);
+        let healedData = Array(maxDataPoints).fill(0);
+        
+        let maxLat = 0;
+        let minLat = 9999;
+        let latSum = 0;
+        let latCount = 0;
+
+        // THE FIX: The 60FPS Animation Queue
+        let displayQueue = [];
+        let pendingTruth = [0, 0, 0, 0, 0];
+        
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: Array(maxDataPoints).fill(''),
+                datasets: [
+                    {
+                        label: 'Transmitted (Raw Data)',
+                        data: originalData,
+                        borderColor: '#ffb703', // Bright Neon Orange/Yellow
+                        borderWidth: 3,
+                        borderDash: [5, 5], // Made it dashed so it's clearly distinct
+                        pointRadius: 0,
+                        tension: 0.3
+                    },
+                    {
+                        label: 'Received (AXON-6 Healed)',
+                        data: healedData,
+                        borderColor: '#00f2fe', // Bright Neon Cyan
+                        borderWidth: 4,
+                        pointRadius: 0,
+                        tension: 0.3
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false, // Turn off default choppy animations
+                plugins: {
+                    legend: { labels: { color: '#fff', font: { size: 14, family: 'Courier New' } } }
+                },
+                scales: {
+                    y: { min: -150, max: 150, grid: { color: '#2b2b36' }, ticks: { color: '#66fcf1' } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+
+        const ws = new WebSocket('ws://127.0.0.1:8765');
+        
+        ws.onmessage = function(event) {
+            const msg = JSON.parse(event.data);
+            
+            if (msg.type === "original_brainwave") {
+                // Catch the raw data, hold it.
+                pendingTruth = msg.data;
+            }
+            else if (msg.type === "brainwave") {
+                // Calculate Latency Specs
+                if (msg.latency > 0) {
+                    if (msg.latency > maxLat) maxLat = msg.latency;
+                    if (msg.latency < minLat) minLat = msg.latency;
+                    latSum += msg.latency;
+                    latCount++;
+                    let avgLat = latSum / latCount;
+                    
+                    document.getElementById('latency').innerText = msg.latency.toFixed(2) + " ms";
+                    document.getElementById('min-latency').innerText = (minLat === 9999 ? 0 : minLat).toFixed(2) + " ms";
+                    document.getElementById('max-latency').innerText = maxLat.toFixed(2) + " ms";
+                    document.getElementById('avg-latency').innerText = avgLat.toFixed(2) + " ms";
+                }
+
+                // Push the 5 matched pairs into the animation queue
+                for (let i = 0; i < 5; i++) {
+                    displayQueue.push({
+                        truth: pendingTruth[i] !== undefined ? pendingTruth[i] : 0,
+                        healed: msg.data[i] !== undefined ? msg.data[i] : 0
+                    });
+                }
+            } 
+            else if (msg.type === "status") {
+                const healthEl = document.getElementById('health');
+                healthEl.innerText = msg.health;
+                if (parseInt(msg.health) < 80) healthEl.classList.add('critical');
+                else healthEl.classList.remove('critical');
+                document.getElementById('shields').innerText = msg.parity + " PARITY";
+            }
+            else if (msg.type === "system") {
+                document.getElementById('system-log').innerText = "ALERT: " + msg.message;
+            }
+        };
+
+        // THE 60 FPS RENDERING ENGINE
+        function renderLoop() {
+            if (displayQueue.length > 0) {
+                // Pop exactly one frame of data off the queue
+                let point = displayQueue.shift();
+
+                originalData.push(point.truth);
+                originalData.shift();
+
+                healedData.push(point.healed);
+                healedData.shift();
+
+                // 'none' forces it to instantly paint the single frame without jitter
+                chart.update('none'); 
+            }
+            // Loop natively at the refresh rate of the monitor
+            requestAnimationFrame(renderLoop);
+        }
+        
+        // Start the engine
+        renderLoop();
+
+        ws.onopen = () => document.getElementById('system-log').innerText = "✅ WebSocket Linked. Awaiting Telemetry...";
+        ws.onclose = () => document.getElementById('system-log').innerText = "🔌 Stream Disconnected.";
+    </script>
+</body>
+</html>
