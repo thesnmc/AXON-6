@@ -5,7 +5,7 @@
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![Status: Experimental](https://img.shields.io/badge/Status-V1.0_Experimental-red.svg)]()
 
-![AXON-6 Tactical Visor](Link_To_Your_Screenshot_Here.png)
+![AXON-6 Tactical Visor](visor_demo.png)
 *> The AXON-6 Visor demonstrating mathematical data resurrection. The **dashed orange line** represents raw clinical data destroyed by network packet loss. The **solid cyan line** represents the AXON-6 matrix perfectly healing the signal in real-time.*
 
 ## ⚠️ The Problem: Standard Bio-Telemetry is Broken
