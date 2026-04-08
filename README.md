@@ -14,7 +14,7 @@ AXON-6 is now a fully importable Python package. You can install the engine dire
 ```bash
 pip install git+[https://github.com/thesnmc/AXON-6.git](https://github.com/thesnmc/AXON-6.git)
 
-🚀 Usage
+##🚀 Usage
 Start the engine and feed it any data array (brainwaves, robotics, telemetry):
 import asyncio
 from axon6.emitter import AxonEmitter
@@ -25,8 +25,6 @@ async def run():
     await engine.transmit([12.4, 15.2, -8.1, 0.4, 5.5]) 
 
 asyncio.run(run())
-
-
 
 ## ⚠️ The Problem: Standard Bio-Telemetry is Broken
 When streaming clinical data to robotic interfaces or AR headsets, standard network protocols fail:
