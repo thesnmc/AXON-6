@@ -8,6 +8,26 @@
 ![AXON-6 Tactical Visor](visor_demo.png)
 *> The AXON-6 Visor demonstrating mathematical data resurrection. The **dashed orange line** represents raw clinical data destroyed by network packet loss. The **solid cyan line** represents the AXON-6 matrix perfectly healing the signal in real-time.*
 
+## 📦 Installation (Plug & Play)
+AXON-6 is now a fully importable Python package. You can install the engine directly from this repository:
+
+```bash
+pip install git+[https://github.com/thesnmc/AXON-6.git](https://github.com/thesnmc/AXON-6.git)
+
+🚀 Usage
+Start the engine and feed it any data array (brainwaves, robotics, telemetry):
+import asyncio
+from axon6.emitter import AxonEmitter
+
+async def run():
+    engine = AxonEmitter()
+    # Feed it 5 floats of data, and AXON-6 handles the matrix healing
+    await engine.transmit([12.4, 15.2, -8.1, 0.4, 5.5]) 
+
+asyncio.run(run())
+
+
+
 ## ⚠️ The Problem: Standard Bio-Telemetry is Broken
 When streaming clinical data to robotic interfaces or AR headsets, standard network protocols fail:
 * **TCP is too slow:** It guarantees delivery, but introduces a buffering delay. In robotic surgery or BCI control, a half-second lag is catastrophic.
