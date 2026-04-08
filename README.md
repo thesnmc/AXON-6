@@ -39,3 +39,28 @@ If packets are destroyed, the Receiver mathematically resurrects them instantly.
          ▲                                                                                      │
          │                                                                                      ▼
  [DYNAMIC ARMOR] ◀────────────────── (Real-Time Parity Adjustments) ──────────────────── [DAMAGE CALCULATION]
+```
+
+---
+
+## 📦 Installation (Plug & Play)
+AXON-6 is now a fully importable Python package. You can install the engine directly from this repository:
+
+```bash
+pip install git+[https://github.com/thesnmc/AXON-6.git](https://github.com/thesnmc/AXON-6.git)
+```
+
+## 🚀 Usage
+Start the engine and feed it any data array (brainwaves, robotics, telemetry):
+
+```python
+import asyncio
+from axon6.emitter import AxonEmitter
+
+async def run():
+    engine = AxonEmitter()
+    # Feed it 5 floats of data, and AXON-6 handles the matrix healing
+    await engine.transmit([12.4, 15.2, -8.1, 0.4, 5.5]) 
+
+asyncio.run(run())
+```
