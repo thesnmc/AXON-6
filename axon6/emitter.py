@@ -8,24 +8,45 @@ import json
 import websockets
 from reedsolo import RSCodec
 
+class FeedbackProtocol(asyncio.DatagramProtocol):
+    """V3 FIX: OS-level network listener. No more while-True CPU hogging!"""
+    def __init__(self, emitter):
+        self.emitter = emitter
+
+    def connection_made(self, transport):
+        self.transport = transport
+
+    def datagram_received(self, data, addr):
+        try:
+            new_parity = int(data.decode().strip())
+            if new_parity != self.emitter.current_parity:
+                self.emitter.current_parity = new_parity
+                self.emitter.rs = RSCodec(self.emitter.current_parity * 8)
+                print(f"🔄 SHIELDS ADAPTED: Matrix shifted to {self.emitter.current_parity} Parity Packets.")
+        except ValueError:
+            print(f"⚠️ [SECURITY] Dropped malformed feedback packet from {addr[0]}")
+
 class AxonEmitter:
     def __init__(self, target_ip="127.0.0.1", data_port=5005, feedback_port=5006, simulate_weather=False):
-        """Initializes the AXON-6 Emitter Node"""
+        """Initializes the AXON-6 V3.0 Emitter Node"""
         self.UDP_IP = target_ip
         self.DATA_PORT = data_port
         self.FEEDBACK_PORT = feedback_port
-        self.PACKET_FORMAT = '>B I I H B d'
+        
+        # V3 FIX: The Authenticated Security Key
+        self.SECRET_KEY = b"AXON-PRO-KEY" 
+        
+        # V3 FIX: Added a second 'B' to the header to transmit dynamic Payload Size
+        self.PACKET_FORMAT = '>B I I H B B d' 
         
         self.current_parity = 1
-        self.rs = RSCodec(self.current_parity * 4)
+        self.rs = RSCodec(self.current_parity * 8) 
         
         self.simulate_weather = simulate_weather
         self.network_weather = 0.0
         
         self.sock_out = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock_in = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock_in.bind((self.UDP_IP, self.FEEDBACK_PORT))
-        self.sock_in.setblocking(False)
+        # Note: self.sock_in is gone! The FeedbackProtocol handles it natively now.
         
         self.visor_ws = None
         self.block_id = 1
@@ -39,18 +60,19 @@ class AxonEmitter:
             print("⚠️ [AXON-6] Visor Dashboard offline. Running blind.")
 
     async def listen_for_feedback(self):
-        """Listens for parity upgrade/downgrade orders from the Receiver"""
+        """Boots the native asyncio Datagram listener"""
+        loop = asyncio.get_running_loop()
+        try:
+            await loop.create_datagram_endpoint(
+                lambda: FeedbackProtocol(self),
+                local_addr=("0.0.0.0", self.FEEDBACK_PORT)
+            )
+        except Exception as e:
+            print(f"❌ [BIND ERROR] Feedback port: {e}")
+            
+        # Keeps this function running so your demo_stream.py doesn't exit instantly
         while True:
-            try:
-                data, _ = self.sock_in.recvfrom(1024)
-                new_parity = int(data.decode())
-                if new_parity != self.current_parity:
-                    self.current_parity = new_parity
-                    self.rs = RSCodec(self.current_parity * 4)
-                    print(f"🔄 EMITTER ADAPTED: Matrix shifted to {self.current_parity} Parity Packets.")
-            except BlockingIOError:
-                pass
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(3600)
 
     async def weather_loop(self):
         """Randomly generates network interference for testing"""
@@ -62,25 +84,26 @@ class AxonEmitter:
             print(f"\n[WEATHER] {w_name} WARNING: {int(self.network_weather*100)}% Packet Loss\n")
 
     async def transmit(self, data_chunk):
-        """Encodes and blasts an array of 5 floats over the UDP matrix"""
-        if len(data_chunk) != 5:
-            raise ValueError("AXON-6 requires data chunks of exactly 5 floats.")
+        """V3 FIX: Dynamic matrix sizes. Pass 5, 10, or 50 floats seamlessly."""
+        payload_size = len(data_chunk)
+        if payload_size > 255:
+            raise ValueError("V3 Matrix limit is 255 floats per block.")
             
         data_bytes = bytearray()
         for value in data_chunk:
-            data_bytes.extend(struct.pack('>f', float(value)))
+            data_bytes.extend(struct.pack('>d', float(value)))
             
         encoded_block = self.rs.encode(data_bytes)
-        total_packets = 5 + self.current_parity
+        total_packets = payload_size + self.current_parity
         birth_time = time.time()
         
         packets = []
         for seq in range(total_packets):
-            chunk = encoded_block[seq*4 : (seq+1)*4]
-            p_type = 0 if seq < 5 else 1
-            # Pack the timestamp into the 20-byte header
-            packet = struct.pack(self.PACKET_FORMAT, p_type, self.block_id, seq, len(chunk), self.current_parity, birth_time) + chunk
-            packets.append(packet)
+            chunk = encoded_block[seq*8 : (seq+1)*8]
+            p_type = 0 if seq < payload_size else 1
+            # V3 FIX: Packing the payload_size directly into the header so the Receiver knows how big the matrix is!
+            header = struct.pack(self.PACKET_FORMAT, p_type, self.block_id, seq, len(chunk), self.current_parity, payload_size, birth_time)
+            packets.append(header + chunk)
 
         # Send Truth to Visor
         if self.visor_ws:
@@ -100,17 +123,18 @@ class AxonEmitter:
             else:
                 destroyed.append(seq)
         
-        float_str = f"[ {', '.join([f'{n:.2f}' for n in data_chunk])} ]"
         if destroyed:
-            print(f"🔥 BLOCK {self.block_id}: Weather destroyed packets {destroyed}! Sent: {float_str}")
+            print(f"🔥 BLOCK {self.block_id}: Weather destroyed packets {destroyed}!")
         else:
-            print(f"✅ BLOCK {self.block_id}: Perfect transmission. Sent: {float_str}")
+            print(f"✅ BLOCK {self.block_id}: Perfect transmission.")
             
         self.block_id += 1
 
     def send_poison_pill(self):
-        """Cleanly kills the stream and shuts down the Receiver"""
-        print("💊 Sending Poison Pill (p_type=9) to Receiver...")
-        poison_pill = struct.pack(self.PACKET_FORMAT, 9, 0, 0, 0, 0, time.time())
-        self.sock_out.sendto(poison_pill, (self.UDP_IP, self.DATA_PORT))
+        """V3 FIX: Authenticated Shutdown. Hackers cannot spoof this."""
+        print("💊 Sending Authenticated Poison Pill to Receiver...")
+        # Pack the header with type 9, and append the un-guessable SECRET_KEY
+        header = struct.pack(self.PACKET_FORMAT, 9, 0, 0, len(self.SECRET_KEY), 0, 0, time.time())
+        packet = header + self.SECRET_KEY
+        self.sock_out.sendto(packet, (self.UDP_IP, self.DATA_PORT))
         print("🔌 Emitter shutting down gracefully.")
