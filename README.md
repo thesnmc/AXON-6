@@ -1,7 +1,7 @@
 # ⚡ AXON-6
 **Real-Time, Self-Healing Neural Telemetry Protocol**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![Status: Experimental](https://img.shields.io/badge/Status-V1.0_Experimental-red.svg)]()
 
