@@ -115,9 +115,10 @@
                 }
 
                 // Push the 5 matched pairs into the animation queue
+                // Push the 5 matched pairs into the animation queue
                 for (let i = 0; i < 5; i++) {
                     displayQueue.push({
-                        truth: pendingTruth[i] !== undefined ? pendingTruth[i] : 0,
+                        truth: msg.data[i] !== undefined ? msg.data[i] : 0, // C++ UDP IS the absolute truth now!
                         healed: msg.data[i] !== undefined ? msg.data[i] : 0
                     });
                 }

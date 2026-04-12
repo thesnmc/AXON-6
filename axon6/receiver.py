@@ -209,16 +209,46 @@ class AxonReceiver:
                 recovered_floats = []
                 
                 # V3 FIX: "Boy Who Cried Wolf" Fix & CPU Saver
+                # V3.2 FIX: Dynamic Array Unpacking & Industrial RS Shielding
                 if not missing_originals:
-                    decoded_data = bytearray(payload_size * 8)
+                    # Combine all packets into one dynamic byte array
+                    decoded_data = bytearray()
                     for seq in range(payload_size):
-                        decoded_data[seq*8 : (seq+1)*8] = self.block_buffer[block_id][seq]
-                    recovered_floats = [struct.unpack('>d', decoded_data[i*8:(i+1)*8])[0] for i in range(payload_size)]
+                        decoded_data.extend(self.block_buffer[block_id][seq])
+                    
+                    # Dynamically count how many 8-byte doubles are actually in the payload!
+                    total_doubles = len(decoded_data) // 8
+                    recovered_floats = [struct.unpack('>d', decoded_data[i*8:(i+1)*8])[0] for i in range(total_doubles)]
                     print(f"⚡ FAST TRACK in {jitter_ms:.2f}ms: [ {', '.join([f'{n:.5f}' for n in recovered_floats])} ]")
                 else:
                     print(f"🚨 ALERT: Data missing in Block {block_id}. Deep Healing...")
-                    healed_bytes = bytearray((payload_size + parity_count) * 8)
+                    # Dynamically figure out how big each packet is from the ones that survived
+                    sample_chunk = self.block_buffer[block_id][received_seqs[0]]
+                    chunk_byte_size = len(sample_chunk)
+                    
+                    healed_bytes = bytearray((payload_size + parity_count) * chunk_byte_size)
                     erasure_positions = []
+                    
+                    for seq in range(payload_size + parity_count):
+                        if seq in received_seqs:
+                            healed_bytes[seq*chunk_byte_size : (seq+1)*chunk_byte_size] = self.block_buffer[block_id][seq]
+                        else:
+                            for b in range(chunk_byte_size):
+                                erasure_positions.append(seq*chunk_byte_size + b)
+                    try:
+                        decoded_data = await asyncio.to_thread(self.rs.decode, healed_bytes, erase_pos=erasure_positions)
+                        decoded_data = decoded_data[0] # RSCodec returns a tuple
+                        
+                        # Strip away parity bytes, leave only original payload
+                        original_bytes = decoded_data[:payload_size * chunk_byte_size]
+                        total_doubles = len(original_bytes) // 8
+                        recovered_floats = [struct.unpack('>d', original_bytes[i*8:(i+1)*8])[0] for i in range(total_doubles)]
+                        print(f"✨ HEALED in {jitter_ms:.2f}ms: [ {', '.join([f'{n:.5f}' for n in recovered_floats])} ]")
+                    except ReedSolomonError:
+                        print(f"💀 CRITICAL: Block {block_id} completely destroyed.")
+                        await self.send_to_visor({"type": "system", "message": f"BLOCK {block_id} CRITICAL LOSS"})
+                        # Graceful fallback so the robot doesn't crash
+                        await self.send_to_visor({"type": "brainwave", "data": [0.0], "latency": 0})
                     
                     for seq in range(payload_size + parity_count):
                         if seq in received_seqs:
