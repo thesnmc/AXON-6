@@ -1,4 +1,5 @@
-# AXON-6 Telemetry Engine | Copyright (c) 2026 thesnmc | MIT License
+# legacy_emitter.py | AXON-6 V3.2 Compatible Emitter
+# Copyright (c) 2026 thesnmc | MIT License
 import struct
 import socket
 import asyncio
@@ -10,16 +11,17 @@ import websockets
 from reedsolo import RSCodec
 import edfio
 
-# THE PROTOCOL SETUP
+# THE PROTOCOL SETUP (V3.2 Dialect)
 UDP_IP = "127.0.0.1" 
 DATA_PORT = 5005
 FEEDBACK_PORT = 5006
-# V1.1 FIX: Added 'd' (Double) to the header for the timestamp. Header is now 20 bytes.
-PACKET_FORMAT = '>B I I H B d' 
+# V3.2 FIX: 21-Byte Header (p_type, block_id, seq_id, length, parity_count, payload_size, birth_time)
+PACKET_FORMAT = '>B I I H B B d' 
 
 # GLOBAL STATE
 current_parity = 1 
-rs = RSCodec(current_parity * 4) 
+# V3.2 FIX: Doubles are 8 bytes, so 1 parity packet = 8 bytes of armor
+rs = RSCodec(current_parity * 8) 
 network_weather = 0.0 
 
 sock_out = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -35,7 +37,7 @@ async def listen_for_feedback():
             new_parity = int(data.decode())
             if new_parity != current_parity:
                 current_parity = new_parity
-                rs = RSCodec(current_parity * 4) 
+                rs = RSCodec(current_parity * 8) # Update armor size
                 print(f"🔄 EMITTER ADAPTED: Matrix shifted to {current_parity} Parity Packets.\n")
         except BlockingIOError:
             pass
@@ -54,7 +56,10 @@ async def simulate_weather():
 
 async def broadcast_brainwaves():
     print("🧠 Loading clinical EEG data...")
-    edf = edfio.read_edf("brainwave_sample.edf")
+    # THE BULLETPROOF FIX: Dynamically find the file path
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    edf_path = os.path.join(current_dir, "brainwave_sample.edf")
+    edf = edfio.read_edf(edf_path)
     brain_signal = edf.signals[0].data
     print("🚀 ASYNC AXON-6 Emitter Online...")
 
@@ -70,24 +75,25 @@ async def broadcast_brainwaves():
     for i in range(0, len(brain_signal) - 5, 5):
         data_bytes = bytearray()
         for j in range(5):
-            data_bytes.extend(struct.pack('>f', brain_signal[i+j]))
+            # V3.2 FIX: Pack as 8-byte Doubles ('>d')
+            data_bytes.extend(struct.pack('>d', float(brain_signal[i+j])))
         
         encoded_block = rs.encode(data_bytes)
         total_packets = 5 + current_parity
         
-        # V1.1 FIX: Stamping the exact birth time
         birth_time = time.time()
         
         packets = []
         for seq in range(total_packets):
-            chunk = encoded_block[seq*4 : (seq+1)*4]
+            # V3.2 FIX: Chunks are now 8 bytes wide
+            chunk = encoded_block[seq*8 : (seq+1)*8]
             p_type = 0 if seq < 5 else 1
-            # Pack the timestamp into the 20-byte header
-            packet = struct.pack(PACKET_FORMAT, p_type, block_id, seq, len(chunk), current_parity, birth_time) + chunk
+            # V3.2 FIX: Added '5' to the header to declare the payload_size!
+            packet = struct.pack(PACKET_FORMAT, p_type, block_id, seq, len(chunk), current_parity, 5, birth_time) + chunk
             packets.append(packet)
 
-        # Unpack the original floats so we can print what we sent
-        original_floats = [struct.unpack('>f', data_bytes[k*4:(k+1)*4])[0] for k in range(5)]
+        # Unpack the original doubles so we can print what we sent
+        original_floats = [struct.unpack('>d', data_bytes[k*8:(k+1)*8])[0] for k in range(5)]
         float_str = f"[ {', '.join([f'{n:.2f}' for n in original_floats])} ]"
 
         # SEND TRUTH DATA TO VISOR
@@ -98,7 +104,7 @@ async def broadcast_brainwaves():
                     "data": original_floats
                 }))
             except websockets.exceptions.ConnectionClosed:
-                visor_ws = None # Connection lost
+                visor_ws = None 
 
         destroyed = []
         for seq, packet in enumerate(packets):
@@ -113,15 +119,16 @@ async def broadcast_brainwaves():
             print(f"✅ BLOCK {block_id}: Perfect transmission. Sent: {float_str}")
             
         block_id += 1
-        await asyncio.sleep(0.1) # Accelerated to 0.1 for a smooth visual demo on the graph
+        await asyncio.sleep(0.1) # Accelerated to 10 FPS for the visualizer
 
-    # V1.1 FIX: THE KILL SWITCH
+    # THE KILL SWITCH
     print("\n🏁 EOF REACHED. Clinical data stream complete.")
     print("💊 Sending Poison Pill (p_type=9) to Receiver...")
-    poison_pill = struct.pack(PACKET_FORMAT, 9, 0, 0, 0, 0, time.time())
+    # V3.2 FIX: Added the extra 0 for payload_size in the poison pill
+    poison_pill = struct.pack(PACKET_FORMAT, 9, 0, 0, 0, 0, 0, time.time())
     sock_out.sendto(poison_pill, (UDP_IP, DATA_PORT))
     print("🔌 Emitter shutting down gracefully.")
-    os._exit(0) # Cleanly kills the async loops
+    os._exit(0) 
 
 async def main():
     await asyncio.gather(listen_for_feedback(), simulate_weather(), broadcast_brainwaves())
