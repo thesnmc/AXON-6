@@ -250,22 +250,7 @@ class AxonReceiver:
                         # Graceful fallback so the robot doesn't crash
                         await self.send_to_visor({"type": "brainwave", "data": [0.0], "latency": 0})
                     
-                    for seq in range(payload_size + parity_count):
-                        if seq in received_seqs:
-                            healed_bytes[seq*8 : (seq+1)*8] = self.block_buffer[block_id][seq]
-                        else:
-                            for b in range(8):
-                                erasure_positions.append(seq*8 + b)
-                    try:
-                        # V3 FIX: Thread Offload prevents the Async Loop from freezing!
-                        decoded_data = await asyncio.to_thread(self.rs.decode, healed_bytes, erase_pos=erasure_positions)
-                        decoded_data = decoded_data[0] # RSCodec returns a tuple
-                        recovered_floats = [struct.unpack('>d', decoded_data[i*8:(i+1)*8])[0] for i in range(payload_size)]
-                        print(f"✨ HEALED in {jitter_ms:.2f}ms: [ {', '.join([f'{n:.5f}' for n in recovered_floats])} ]")
-                    except ReedSolomonError:
-                        print(f"💀 CRITICAL: Block {block_id} completely destroyed.")
-                        await self.send_to_visor({"type": "system", "message": f"BLOCK {block_id} CRITICAL LOSS"})
-                        await self.send_to_visor({"type": "brainwave", "data": [0.0]*payload_size, "latency": 0})
+                    
 
                 if recovered_floats:
                     if self.on_data_received:
