@@ -114,11 +114,10 @@
                     document.getElementById('avg-latency').innerText = avgLat.toFixed(2) + " ms";
                 }
 
-                // Push the 5 matched pairs into the animation queue
-                // Push the 5 matched pairs into the animation queue
+                // THE FIX: Push the 5 matched pairs into the animation queue correctly mapped!
                 for (let i = 0; i < 5; i++) {
                     displayQueue.push({
-                        truth: msg.data[i] !== undefined ? msg.data[i] : 0, // C++ UDP IS the absolute truth now!
+                        truth: pendingTruth[i] !== undefined ? pendingTruth[i] : 0, // Mapped to the Emitter's Truth
                         healed: msg.data[i] !== undefined ? msg.data[i] : 0
                     });
                 }
