@@ -1,4 +1,4 @@
-# AXON-6 Telemetry Engine
+# AXON-6 Telemetry Engine (SECURE TIMELINE - CHACHA20)
 # Copyright 2026 thesnmc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,6 +20,7 @@ import os
 import json
 import websockets
 from reedsolo import RSCodec, ReedSolomonError
+from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
 class ReceiverProtocol(asyncio.DatagramProtocol):
     """V3 FIX: OS-level network listener. No more while-True CPU hogging!"""
@@ -35,13 +36,17 @@ class ReceiverProtocol(asyncio.DatagramProtocol):
 
 class AxonReceiver:
     def __init__(self, listen_ip="0.0.0.0", data_port=5005, feedback_port=5006, on_data_received=None):
-        """Initializes the AXON-6 V3.1 Receiver Node"""
+        """Initializes the AXON-6 V3.3 SECURE Receiver Node"""
         self.UDP_IP = listen_ip
         self.DATA_PORT = data_port
         self.FEEDBACK_PORT = feedback_port
         
         # V3 FIX: The Authenticated Security Key
         self.SECRET_KEY = b"AXON-PRO-KEY" 
+
+        # 🛡️ V3.3 SECURE CORE: 32-Byte Master Encryption Key
+        self.ENCRYPTION_KEY = b"AXON-6-MILITARY-GRADE-KEY-32BYTE"
+        self.chacha = ChaCha20Poly1305(self.ENCRYPTION_KEY)
         
         # V3 FIX: Added a second 'B' to the header to dynamically track Payload Size
         self.PACKET_FORMAT = '>B I I H B B d'
@@ -169,7 +174,7 @@ class AxonReceiver:
             # V3 FIX: Now unpacks the dynamic payload_size!
             p_type, block_id, seq_id, length, parity_count, payload_size, birth_time = struct.unpack(self.PACKET_FORMAT, header)
             
-            # V3 FIX: Authenticated Poison Pill
+            # V3 FIX: Authenticated Poison Pill (Not Encrypted)
             if p_type == 9:
                 if payload == self.SECRET_KEY:
                     print(f"\n🏁 AUTHENTICATED POISON PILL RECEIVED. Surgery complete.")
@@ -179,6 +184,19 @@ class AxonReceiver:
                     os._exit(0)
                 else:
                     print("⚠️ [SECURITY] Unauthenticated shutdown attempt blocked!")
+                continue
+
+            # 🛡️ V3.3 SECURE CORE: DECRYPTION & TAMPER CHECK
+            try:
+                # Extract the 12-byte Nonce and the remaining Ciphertext
+                nonce = payload[:12]
+                ciphertext = payload[12:]
+                
+                # Decrypt and mathematically verify the Poly1305 MAC tag
+                decrypted_chunk = self.chacha.decrypt(nonce, ciphertext, None)
+            except Exception:
+                # If a hacker flips a single bit, the MAC tag fails and we drop it immediately!
+                print(f"🛑 [SECURITY] Tampering detected in Block {block_id}, Seq {seq_id}! Packet dropped.")
                 continue
 
             if block_id > self.last_block_id + 1 and self.last_block_id != 0:
@@ -197,7 +215,8 @@ class AxonReceiver:
                 self.block_timestamps[block_id] = time.time()
                 self.total_expected += (payload_size + parity_count)
                 
-            self.block_buffer[block_id][seq_id] = payload
+            # Store the PURE, DECRYPTED chunk in the buffer for the RS Math Engine
+            self.block_buffer[block_id][seq_id] = decrypted_chunk
             self.total_received += 1
             
             # V3 FIX: Dynamic length checking
@@ -208,8 +227,6 @@ class AxonReceiver:
                 jitter_ms = self.sync_latency(birth_time)
                 recovered_floats = []
                 
-                # V3 FIX: "Boy Who Cried Wolf" Fix & CPU Saver
-                # V3.2 FIX: Dynamic Array Unpacking & Industrial RS Shielding
                 if not missing_originals:
                     # Combine all packets into one dynamic byte array
                     decoded_data = bytearray()
@@ -248,9 +265,7 @@ class AxonReceiver:
                         print(f"💀 CRITICAL: Block {block_id} completely destroyed.")
                         await self.send_to_visor({"type": "system", "message": f"BLOCK {block_id} CRITICAL LOSS"})
                         # Graceful fallback so the robot doesn't crash
-                        await self.send_to_visor({"type": "brainwave", "data": [0.0], "latency": 0})
-                    
-                    
+                        await self.send_to_visor({"type": "brainwave", "data": [0.0]*payload_size, "latency": 0})
 
                 if recovered_floats:
                     if self.on_data_received:
@@ -268,7 +283,7 @@ class AxonReceiver:
 
     async def run(self):
         """Boots the receiver loops"""
-        print("🛡️ ASYNC AXON-6 Tactical Receiver Online (V3.1 Masterpiece)...")
+        print("🛡️ ASYNC AXON-6 Tactical Receiver Online (V3.3 SECURE Masterpiece)...")
         print("📡 Visor Dashboard broadcasting on ws://localhost:8765\n")
         
         # V3 FIX: Connect the OS-level Datagram Endpoint

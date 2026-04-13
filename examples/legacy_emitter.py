@@ -1,5 +1,5 @@
-# legacy_emitter.py | AXON-6 V3.2 Compatible Emitter
-# Copyright (c) 2026 thesnmc | MIT License
+# AXON-6 Telemetry Engine (SECURE TIMELINE - CHACHA20)
+# Copyright 2026 thesnmc
 import struct
 import socket
 import asyncio
@@ -8,130 +8,162 @@ import time
 import os
 import json
 import websockets
-from reedsolo import RSCodec
 import edfio
+from reedsolo import RSCodec
+from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
-# THE PROTOCOL SETUP (V3.2 Dialect)
-UDP_IP = "127.0.0.1" 
-DATA_PORT = 5005
-FEEDBACK_PORT = 5006
-# V3.2 FIX: 21-Byte Header (p_type, block_id, seq_id, length, parity_count, payload_size, birth_time)
-PACKET_FORMAT = '>B I I H B B d' 
+class FeedbackProtocol(asyncio.DatagramProtocol):
+    def __init__(self, emitter):
+        self.emitter = emitter
 
-# GLOBAL STATE
-current_parity = 1 
-# V3.2 FIX: Doubles are 8 bytes, so 1 parity packet = 8 bytes of armor
-rs = RSCodec(current_parity * 8) 
-network_weather = 0.0 
+    def connection_made(self, transport):
+        self.transport = transport
 
-sock_out = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock_in = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock_in.bind((UDP_IP, FEEDBACK_PORT))
-sock_in.setblocking(False) 
-
-async def listen_for_feedback():
-    global current_parity, rs
-    while True:
+    def datagram_received(self, data, addr):
         try:
-            data, _ = sock_in.recvfrom(1024)
-            new_parity = int(data.decode())
-            if new_parity != current_parity:
-                current_parity = new_parity
-                rs = RSCodec(current_parity * 8) # Update armor size
-                print(f"🔄 EMITTER ADAPTED: Matrix shifted to {current_parity} Parity Packets.\n")
-        except BlockingIOError:
-            pass
-        await asyncio.sleep(0.1)
+            new_parity = int(data.decode().strip())
+            if new_parity != self.emitter.current_parity:
+                self.emitter.current_parity = new_parity
+                self.emitter.rs = RSCodec(self.emitter.current_parity * 8)
+                print(f"🔄 SHIELDS ADAPTED: Matrix shifted to {self.emitter.current_parity} Parity Packets.")
+        except ValueError:
+            print(f"⚠️ [SECURITY] Dropped malformed feedback packet from {addr[0]}")
 
-async def simulate_weather():
-    global network_weather
-    while True:
-        await asyncio.sleep(6)
-        weather_states = [0.0, 0.15, 0.40] 
-        network_weather = random.choice(weather_states)
-        weather_name = "☀️ CLEAR" if network_weather == 0 else ("🌧️ CLOUDY" if network_weather < 0.2 else "⛈️ STORM")
-        print(f"\n==================================================")
-        print(f"{weather_name} WARNING: {int(network_weather*100)}% Packet Loss")
-        print(f"==================================================\n")
+class AxonEmitter:
+    def __init__(self, target_ip="127.0.0.1", data_port=5005, feedback_port=5006, simulate_weather=False):
+        self.UDP_IP = target_ip
+        self.DATA_PORT = data_port
+        self.FEEDBACK_PORT = feedback_port
+        
+        self.SECRET_KEY = b"AXON-PRO-KEY" 
+        
+        # 🛡️ V3.3 SECURE CORE: 32-Byte Master Encryption Key
+        self.ENCRYPTION_KEY = b"AXON-6-MILITARY-GRADE-KEY-32BYTE"
+        self.chacha = ChaCha20Poly1305(self.ENCRYPTION_KEY)
+        
+        self.PACKET_FORMAT = '>B I I H B B d' 
+        self.current_parity = 1
+        self.rs = RSCodec(self.current_parity * 8) 
+        
+        self.simulate_weather = simulate_weather
+        self.network_weather = 0.0
+        
+        self.sock_out = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.visor_ws = None
+        self.block_id = 1
 
-async def broadcast_brainwaves():
-    print("🧠 Loading clinical EEG data...")
-    # THE BULLETPROOF FIX: Dynamically find the file path
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    edf_path = os.path.join(current_dir, "brainwave_sample.edf")
-    edf = edfio.read_edf(edf_path)
-    brain_signal = edf.signals[0].data
-    print("🚀 ASYNC AXON-6 Emitter Online...")
+    async def connect_visor(self, uri="ws://127.0.0.1:8765"):
+        try:
+            self.visor_ws = await websockets.connect(uri)
+            print("🔗 [AXON-6] Uplink established with Visor Dashboard.")
+        except Exception:
+            print("⚠️ [AXON-6] Visor Dashboard offline. Running blind.")
 
-    # LINK TO VISOR (Websocket Client)
-    visor_ws = None
-    try:
-        visor_ws = await websockets.connect("ws://127.0.0.1:8765")
-        print("🔗 Uplink established with Visor Dashboard.")
-    except Exception:
-        print("⚠️ Visor Dashboard offline. Running blind.")
+    async def listen_for_feedback(self):
+        loop = asyncio.get_running_loop()
+        try:
+            await loop.create_datagram_endpoint(
+                lambda: FeedbackProtocol(self),
+                local_addr=("0.0.0.0", self.FEEDBACK_PORT)
+            )
+        except Exception as e:
+            print(f"❌ [BIND ERROR] Feedback port: {e}")
+        while True:
+            await asyncio.sleep(3600)
 
-    block_id = 1
-    for i in range(0, len(brain_signal) - 5, 5):
+    async def weather_loop(self):
+        while self.simulate_weather:
+            await asyncio.sleep(6)
+            weather_states = [0.0, 0.15, 0.40]
+            self.network_weather = random.choice(weather_states)
+            w_name = "☀️ CLEAR" if self.network_weather == 0 else ("🌧️ CLOUDY" if self.network_weather < 0.2 else "⛈️ STORM")
+            print(f"\n[WEATHER] {w_name} WARNING: {int(self.network_weather*100)}% Packet Loss\n")
+
+    async def transmit(self, data_chunk):
+        payload_size = len(data_chunk)
         data_bytes = bytearray()
-        for j in range(5):
-            # V3.2 FIX: Pack as 8-byte Doubles ('>d')
-            data_bytes.extend(struct.pack('>d', float(brain_signal[i+j])))
-        
-        encoded_block = rs.encode(data_bytes)
-        total_packets = 5 + current_parity
-        
+        for value in data_chunk:
+            data_bytes.extend(struct.pack('>d', float(value)))
+            
+        encoded_block = self.rs.encode(data_bytes)
+        total_packets = payload_size + self.current_parity
         birth_time = time.time()
         
         packets = []
         for seq in range(total_packets):
-            # V3.2 FIX: Chunks are now 8 bytes wide
             chunk = encoded_block[seq*8 : (seq+1)*8]
-            p_type = 0 if seq < 5 else 1
-            # V3.2 FIX: Added '5' to the header to declare the payload_size!
-            packet = struct.pack(PACKET_FORMAT, p_type, block_id, seq, len(chunk), current_parity, 5, birth_time) + chunk
-            packets.append(packet)
+            
+            # 🛡️ V3.3 SECURE CORE: ENCRYPTION
+            nonce = os.urandom(12)
+            encrypted_chunk = self.chacha.encrypt(nonce, chunk, None)
+            secure_payload = nonce + encrypted_chunk
+            
+            p_type = 0 if seq < payload_size else 1
+            header = struct.pack(self.PACKET_FORMAT, p_type, self.block_id, seq, len(secure_payload), self.current_parity, payload_size, birth_time)
+            packets.append(header + secure_payload)
 
-        # Unpack the original doubles so we can print what we sent
-        original_floats = [struct.unpack('>d', data_bytes[k*8:(k+1)*8])[0] for k in range(5)]
-        float_str = f"[ {', '.join([f'{n:.2f}' for n in original_floats])} ]"
-
-        # SEND TRUTH DATA TO VISOR
-        if visor_ws:
+        if self.visor_ws:
             try:
-                await visor_ws.send(json.dumps({
+                await self.visor_ws.send(json.dumps({
                     "type": "original_brainwave",
-                    "data": original_floats
+                    "data": data_chunk
                 }))
             except websockets.exceptions.ConnectionClosed:
-                visor_ws = None 
+                self.visor_ws = None 
 
         destroyed = []
         for seq, packet in enumerate(packets):
-            if random.random() > network_weather:
-                sock_out.sendto(packet, (UDP_IP, DATA_PORT))
+            if random.random() > self.network_weather:
+                self.sock_out.sendto(packet, (self.UDP_IP, self.DATA_PORT))
             else:
                 destroyed.append(seq)
-                
+        
         if destroyed:
-            print(f"🔥 BLOCK {block_id}: Weather destroyed packets {destroyed}! Sent: {float_str}")
+            print(f"🔥 BLOCK {self.block_id}: Weather destroyed packets {destroyed}!")
         else:
-            print(f"✅ BLOCK {block_id}: Perfect transmission. Sent: {float_str}")
+            print(f"✅ BLOCK {self.block_id}: Perfect transmission.")
             
-        block_id += 1
-        await asyncio.sleep(0.1) # Accelerated to 10 FPS for the visualizer
+        self.block_id += 1
 
-    # THE KILL SWITCH
-    print("\n🏁 EOF REACHED. Clinical data stream complete.")
-    print("💊 Sending Poison Pill (p_type=9) to Receiver...")
-    # V3.2 FIX: Added the extra 0 for payload_size in the poison pill
-    poison_pill = struct.pack(PACKET_FORMAT, 9, 0, 0, 0, 0, 0, time.time())
-    sock_out.sendto(poison_pill, (UDP_IP, DATA_PORT))
-    print("🔌 Emitter shutting down gracefully.")
-    os._exit(0) 
+    def send_poison_pill(self):
+        print("💊 Sending Authenticated Poison Pill to Receiver...")
+        header = struct.pack(self.PACKET_FORMAT, 9, 0, 0, len(self.SECRET_KEY), 0, 0, time.time())
+        packet = header + self.SECRET_KEY
+        self.sock_out.sendto(packet, (self.UDP_IP, self.DATA_PORT))
+        print("🔌 Emitter shutting down gracefully.")
+
 
 async def main():
-    await asyncio.gather(listen_for_feedback(), simulate_weather(), broadcast_brainwaves())
+    print("🧠 Booting AXON-6 Secure Emitter...")
+    emitter = AxonEmitter(simulate_weather=True)
+    await emitter.connect_visor()
+
+    # Load clinical EEG data
+    try:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        edf_path = os.path.join(current_dir, "brainwave_sample.edf")
+        edf = edfio.read_edf(edf_path)
+        brain_signal = edf.signals[0].data
+        print("🚀 Clinical data loaded. Commencing encrypted transmission...")
+    except FileNotFoundError:
+        print("⚠️ EDF file not found. Generating secure synthetic brainwaves...")
+        brain_signal = [random.uniform(-100, 100) for _ in range(1000)]
+
+    # Start background tasks
+    loop = asyncio.get_running_loop()
+    loop.create_task(emitter.listen_for_feedback())
+    loop.create_task(emitter.weather_loop())
+
+    # Main transmission loop
+    for i in range(0, len(brain_signal) - 5, 5):
+        chunk = brain_signal[i:i+5]
+        if len(chunk) == 5:
+            # Convert numpy array elements to floats so JSON serialization doesn't crash
+            float_chunk = [float(x) for x in chunk]
+            await emitter.transmit(float_chunk)
+        await asyncio.sleep(0.1) # Accelerated to 10 FPS
+
+    emitter.send_poison_pill()
 
 if __name__ == "__main__":
     asyncio.run(main())
