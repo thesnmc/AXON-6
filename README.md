@@ -96,4 +96,4 @@ The Visor will switch from the C++ sine waves to real, erratic biological EEG da
 
 ---
 
-*License: Apache 2.0 | Copyright: (c) 2026 thesnmc*
+*License: Copyright: (c) 2026 thesnmc*
