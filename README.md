@@ -1,99 +1,79 @@
-# ⚡ AXON-6
-
-**Real-Time, Self-Healing Neural Telemetry Protocol (V3.2 Hardware Bridge)**
-
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![Status: V3.2 Hardware Bridge](https://img.shields.io/badge/Status-V3.2_Hardware_Bridge-red.svg)]()
-
-![AXON-6 Tactical Visor](visor_demo.png)
-*> The AXON-6 Visor demonstrating mathematical data resurrection. The **dashed orange line** represents raw clinical data destroyed by network packet loss. The **solid cyan line** represents the AXON-6 matrix perfectly healing the signal in real-time.*
-
-## ⚠️ The Problem: Standard Bio-Telemetry is Broken
-
-When streaming clinical data to robotic interfaces or AR headsets, standard network protocols fail:
-* **TCP is too slow:** It guarantees delivery, but introduces a buffering delay. In robotic surgery or BCI control, a half-second lag is catastrophic.
-* **UDP is blind:** It operates with zero latency, but if Wi-Fi interference (a microwave, a concrete wall) destroys packets mid-air, the biological data is permanently lost.
-
-## 🚀 The AXON-6 Solution
-
-AXON-6 fixes this by implementing a **Two-Way Adaptive Reed-Solomon Matrix** designed explicitly for a Bare-Metal Edge to OS-Level Core pipeline. 
-
-Instead of just blasting data, the Edge (ESP32/C++) mathematically wraps microsecond brainwave chunks in a polynomial shield. The Core (Python) monitors packet loss in real-time. If network weather gets bad, the Core uses a secret back-channel to order the Edge to increase its parity armor mid-flight. 
-
-If packets are destroyed, the Receiver mathematically resurrects them instantly. **Zero latency. Zero data loss.**
+# 🚀 AXON-6 Telemetry Engine
+> A zero-latency, cryptographically secure UDP telemetry middleware for brain-computer interfaces and robotic kinematics.
 
 ---
 
-## 🏗️ System Architecture (V3.2)
+## 📖 Overview
+Modern Brain-Computer Interfaces (BCI) and robotic hardware require sub-millisecond reaction times to function safely and effectively. Standard network protocols (like TCP) introduce catastrophic kinematic stutter when waiting for dropped packets, while standard UDP streams are vulnerable to interception and total data loss during network volatility. AXON-6 bridges this gap by acting as a highly optimized, strictly unidirectional middleware pipeline.
 
-```text
-  [THE EDGE: SILICON SENSOR]                               [WIFI / 6G NETWORK]                               [THE CORE: NEURAL RECEIVER]
-   Raw C++ Memory Array                                                                                                               
-         │                                               (Packet Loss / Storms)                        
-         ▼                                                         │                                 
- ┌──────────────────────┐                                          ▼                                ┌──────────────────────┐
- │ C++ EMITTER (ESP32)  │   ████████████  (Data Port 5005) ╪  ██████████  (Damaged Data)            │ PYTHON ENGINE (V3.2) │
- │                      │ ─────────────────────────────────────────────────────────────────────────▶ │                      │
- │ 1. Ingests Sensors   │                                  ╪                                        │ 1. Async OS Catch    │
- │ 2. Packs Memory      │                                  │                                        │ 2. Deep Heal Matrix  │
- │ 3. UDP Shotgun Blast │ ◀───────────────────────────────────────────────────────────────────────── │ 3. Dynamic Unpacking │
- └──────────────────────┘     "MAX SHIELDS!" (Secret Feedback Port 5006)                            └──────────────────────┘
-         ▲                                                                                                    │
-         │                                                                                                    ▼
- [DYNAMIC ARMOR] ◀────────────────── (Real-Time Parity Adjustments) ───────────────────────────────── [DAMAGE CALCULATION]
-```
+By replacing standard transmission requests with dynamic Reed-Solomon Forward Error Correction (FEC), AXON-6 mathematically reconstructs shattered packets mid-air. It adapts its parity shielding in real-time based on network weather, ensuring the physical hardware never stalls.
 
-## 📦 Installation (Plug & Play)
+Furthermore, AXON-6 is built on a foundation of absolute privacy. Every biological float-point array is sealed with ChaCha20-Poly1305 encryption before it ever hits the network card. It operates completely offline, allowing engineers to connect biological signals to physical servos without a single byte of data touching a corporate cloud server.
 
-AXON-6 is a fully importable Python package. To install the core engine:
+**The Core Mandate:** Absolute kinematic speed, dynamic mathematical resilience, and an uncompromising commitment to local data sovereignty.
 
-```bash
-pip install git+[https://github.com/thesnmc/AXON-6.git](https://github.com/thesnmc/AXON-6.git)
-```
+## ✨ Key Features
+* **Sub-Millisecond Latency:** Bypasses TCP handshakes entirely. Utilizes OS-level asynchronous `DatagramProtocol` queueing to ensure Python idles at 0% CPU until physical network interrupts occur.
+* **Military-Grade Security:** Payloads are sealed using ChaCha20-Poly1305 encryption with unique 12-byte nonces, eliminating the possibility of interception, spoofing, or replay attacks.
+* **Reed-Solomon Deep Healing:** Implements dynamic matrix math to execute Forward Error Correction (FEC). Rebuilds missing telemetry frames from parity packets without ever requesting a retransmission.
+* **Decoupled 60FPS Diagnostic Visor:** A stateless HTML5/WebSocket frontend that visualizes raw network health and mathematically healed truth data, entirely independent of the core hardware pipeline.
+* **Authenticated Kill Switch:** An un-spoofable, hardware-level operational abort feature that bypasses standard payloads, requiring a precise 32-byte secret key to execute.
+* **Original-Payload Short-Circuiting:** An optimization engine that instantly bypasses heavy FEC matrix calculations if only parity packets are lost during a storm.
 
-*Note: To run the visual examples and C++ hardware emulators below, clone this repository directly.*
+## 🛠️ Tech Stack
+* **Language:** Python 3.14+ (Core Engine) / HTML5 & JavaScript (Visor UI)
+* **Framework:** Python `asyncio` for non-blocking, OS-level concurrency.
+* **Environment:** VS Code / Linux Edge Devices (Raspberry Pi / ESP32 integration)
+* **Key Libraries/APIs:** `cryptography` (ChaCha20 C-extensions), `reedsolo` (Error Correction), `websockets` (UI relay), `edfio` (Clinical data parsing).
 
-## 🚀 Usage: The Hardware Bridge
+## ⚙️ Architecture & Data Flow
+The system is cleanly divided into three distinct operational nodes:
 
-AXON-6 is designed to bridge bare-metal hardware (ESP32, Arduino) directly to a high-power Python server. Here is how to test the V3.2 Matrix locally.
+* **Input (The Emitter):** Biological data (64-bit float arrays) is ingested, dynamically sized into blocks, shielded with Reed-Solomon parity matrices, encrypted, and blasted over the UDP socket.
+* **Processing (The Receiver):** The edge node captures the packet, verifies the Poly1305 MAC tag, decrypts the payload, and feeds it into the erasure matrix for structural healing. Dead blocks are purged asynchronously.
+* **Output (The Bridge & Visor):** The healed, pristine float array is split. One stream is relayed via WebSockets to the diagnostic UI, while the primary stream is mapped to kinematics and pushed via Serial/I2C to the physical servomotors.
 
-### 1. Boot the Matrix (The Python Receiver)
-Start the OS-level Python receiver to listen for incoming hardware telemetry. It dynamically measures "Fat Packets" and scales Reed-Solomon shielding automatically.
+## 🔒 Privacy & Data Sovereignty
+* **Data Collection:** Absolute zero. Telemetry is transmitted point-to-point and vanishes the moment the kinematic frame is executed.
+* **Permissions Required:** Standard local network binding for UDP/WebSocket protocols. No external permissions are requested or utilized.
+* **Cloud Connectivity:** Strictly disabled by design. AXON-6 relies entirely on local area networks (LAN) or direct point-to-point interfaces, ensuring Sovereign control over biological data.
 
-```bash
-python -m examples.demo_receiver
-```
+## 🚀 Getting Started
 
-### 2. Boot the Visor (The HUD)
-Open `visor.html` in any web browser. It automatically connects to the Receiver's WebSocket (`ws://127.0.0.1:8765`) to render a real-time, 60FPS cybernetic telemetry dashboard.
+### Prerequisites
+* **Minimum OS:** Windows 10/11, Linux, or macOS.
+* **Python:** 3.10 or higher.
+* **Required development environment:** VS Code or any standard Python IDE.
 
-### 3. Fire the Silicon (The C++ Emitter)
-Open a second terminal, compile the bare-metal C++ hardware emulator, and fire the UDP memory shotgun at the receiver.
+### Installation
 
-```bash
-# Compile the Windows executable (Requires MinGW/g++)
-g++ emulator.cpp -o emulator -lws2_32
+1. **Clone the repository:**
+   ```bash
+   git clone [https://github.com/thesnmc/AXON-6.git](https://github.com/thesnmc/AXON-6.git)
+   ```
 
-# Fire the continuous Full-Auto stream
-.\emulator
-```
+2. Open the project in your IDE and navigate to the project root.
 
-Watch the Visor dashboard instantly graph the C++ sine waves at zero-latency.
+3. **Install the required cryptographic and mathematical dependencies:**
+   ```bash
+   pip install cryptography reedsolo websockets edfio
+   ```
 
-## 🔬 Legacy Testing: Clinical .EDF Data
+4. Boot the 60FPS Diagnostic Visor by opening `examples/visor.html` in your web browser.
 
-AXON-6 maintains backward compatibility for testing raw clinical data without physical hardware. You can simulate hostile network storms and watch the Matrix heal real human brainwaves.
+5. **Launch the Receiver node in Terminal 1:**
+   ```bash
+   python -m examples.demo_receiver
+   ```
 
-1. Keep the Receiver and Visor running.
-2. In your second terminal, run the Legacy Clinical Emitter:
+6. **Fire the Emitter sequence in Terminal 2 to commence the encrypted stream:**
+   ```bash
+   python examples/legacy_emitter.py
+   ```
 
-```bash
-python examples\legacy_emitter.py
-```
+## 🤝 Contributing
+Contributions, issues, and feature requests are welcome. Feel free to check the issues page if you want to contribute to the telemetry protocol, resilience math, or hardware bridge implementations.
 
-The Visor will switch from the C++ sine waves to real, erratic biological EEG data. Every 6 seconds, the Emitter will simulate random packet loss (Network Weather), forcing the Receiver's Deep Healing to activate in real-time.
-
----
-
-*License: Copyright: (c) 2026 thesnmc*
+## 📄 License
+This project is licensed under the TheSNMC License - see the LICENSE file for details.  
+Built by an independent developer in Chennai, India.
