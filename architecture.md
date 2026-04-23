@@ -1,5 +1,5 @@
 # 🏗️ Architecture & Design Document: AXON-6 Telemetry Engine
-**Version:** 3.3.0 Secure Core | **Date:** 2026-04-22 | **Author:** thesnmc
+**Version:** 3.3.0 Secure Core | **Date:** 2026-04-22 | **Author:** Sujay
 
 ---
 
