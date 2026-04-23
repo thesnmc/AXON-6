@@ -1,6 +1,7 @@
 # 🚀 AXON-6 Telemetry Engine
 > A zero-latency, cryptographically secure UDP telemetry middleware for brain-computer interfaces and robotic kinematics.
 
+[![License](https://img.shields.io/badge/License-TheSNMC-blue.svg)](LICENSE)
 ---
 
 ## 📖 Overview
